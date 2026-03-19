@@ -307,20 +307,10 @@
     };
 
 function saveDB() {
-    // 1. الحفظ في ذاكرة المتصفح (عشان السرعة)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-
-    // 2. الحفظ في Firebase (عشان الكل يشوف القنوات والأخبار)
-    // نستخدم 'set' لتحديث قاعدة البيانات بالكامل
-    database.ref('awadeed_app_data').set(db)
-    .then(() => {
-        console.log("تم المزامنة مع السحاب بنجاح ✅");
-    })
-    .catch((error) => {
-        console.error("خطأ في المزامنة: ", error);
-    });
+    database.ref('awadeed_app_data').set(db); 
 }
-function toast(m) { const n = document.getElementById('notif-bar'); n.innerText = m; n.className = 'notif show'; setTimeout(() => n.className = 'notif', 3000); }
+    function toast(m) { const n = document.getElementById('notif-bar'); n.innerText = m; n.className = 'notif show'; setTimeout(() => n.className = 'notif', 3000); }
     function toggleAuth(m) { document.getElementById('login-form').style.display = m === 'login' ? 'block' : 'none'; document.getElementById('reg-form').style.display = m === 'reg' ? 'block' : 'none'; }
 
 function handleLogin() {
