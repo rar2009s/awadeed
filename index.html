@@ -3,9 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أخبار الرواديد - النسخة الاحترافية</title>
+    <title>أخبار الرواديد - قنوات</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+
+    <script>
+        // 2. إعدادات مشروعك الخاصة بـ Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyAahhEpW6OA2vJfNnoY-nPuiBkeTDB4SRU",
+            authDomain: "rawadeed-app.firebaseapp.com",
+            databaseURL: "https://rawadeed-app-default-rtdb.firebaseio.com",
+            projectId: "rawadeed-app",
+            storageBucket: "rawadeed-app.firebasestorage.app",
+            messagingSenderId: "666972615038",
+            appId: "1:666972615038:web:ef00f1c8ba2a10266e832f"
+        };
+
+        // 3. تشغيل Firebase وقاعدة البيانات
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        console.log("تم الربط بنجاح مع Firebase 🔥");
+    </script>
+
     <style>
+        /* هنا تكمل الـ CSS الخاص بك */
         :root {
             --bg: #0a0e17; --card: #111622; --text: #ffffff; --sec: #8b9bb4; --accent: #f1c40f;
             --border: #242b3d; --input: #161b2a; --danger: #e74c3c; --blue: #3498db;
