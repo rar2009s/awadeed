@@ -430,31 +430,69 @@ function navTo(scr) {
         // ملاحظة: صفحة 'help' لا تحتاج دالة render لأن محتواها ثابت (نصوص فقط)
     }
     
-    function renderDiscover() {
-        document.getElementById('grid-discover').innerHTML = db.channels.map(c => {
-            const isFollowing = (c.followers || []).includes(db.cur.id);
-            return `
-                <div class="ch-card">
-                    <img src="${c.img}" class="ch-img" onclick="openChannelChat(${c.id})">
-                    <div style="font-weight:bold; margin-top:5px;">
-                        ${c.n} ${c.verified ? `<i class="fas fa-check-circle" style="color:${c.verColor}"></i>` : ''}
-                    </div>
-                    <div style="font-size:11px; color:var(--sec); margin-bottom:8px;">${(c.followers || []).length} متابع</div>
-                    <button class="btn btn-sm" style="width:100%; background:${isFollowing ? 'var(--input)' : 'var(--accent)'}" onclick="toggleFollow(${c.id})">
-                        ${isFollowing ? 'إلغاء المتابعة' : 'متابعة'}
-                    </button>
-                </div>`;
-        }).join('') || "لا توجد قنوات حالياً";
+function renderDiscover() {
+    // 1. التأكد من وجود مصفوفة متابعات للمستخدم لتجنب الأخطاء
+    if (db.cur && !db.cur.following) db.cur.following = [];
+
+    const grid = document.getElementById('grid-discover');
+    if (!grid) return;
+
+    grid.innerHTML = db.channels.map(c => {
+        // 2. فحص المتابعة من "حساب المستخدم" وليس من القناة
+        const isFollowing = db.cur && db.cur.following && db.cur.following.includes(c.id);
+        
+        // 3. عدد المتابعين (اختياري: يمكنك إبقاؤه أو حذفه إذا كنت لا تريد مزامنة الأرقام)
+        const followersCount = (c.followers || []).length;
+
+        return `
+            <div class="ch-card">
+                <img src="${c.img}" class="ch-img" onclick="openChannelChat(${c.id})">
+                <div style="font-weight:bold; margin-top:5px;">
+                    ${c.n} ${c.verified ? `<i class="fas fa-check-circle" style="color:${c.verColor}"></i>` : ''}
+                </div>
+                <div style="font-size:11px; color:var(--sec); margin-bottom:8px;">${followersCount} متابع</div>
+                
+                <button class="btn btn-sm" 
+                    style="width:100%; background:${isFollowing ? 'var(--input)' : 'var(--accent)'}" 
+                    onclick="toggleFollow(${c.id})">
+                    ${isFollowing ? 'إلغاء المتابعة' : 'متابعة'}
+                </button>
+            </div>`;
+    }).join('') || '<div style="text-align:center; padding:20px; color:var(--sec);">لا توجد قنوات حالياً</div>';
+}
+
+function toggleFollow(chId) {
+    // 1. التحقق من تسجيل الدخول
+    if (!db.cur) {
+        toast("سجل دخول أولاً");
+        return;
     }
 
-    function toggleFollow(chId) {
-        const ch = db.channels.find(c => c.id === chId);
-        if (!ch.followers) ch.followers = [];
-        const idx = ch.followers.indexOf(db.cur.id);
-        if (idx === -1) ch.followers.push(db.cur.id);
-        else ch.followers.splice(idx, 1);
-        saveDB(); renderDiscover();
+    // 2. التأكد من وجود مصفوفة المتابعات في حساب المستخدم الحالي
+    if (!db.cur.following) {
+        db.cur.following = [];
     }
+
+    // 3. البحث عن القناة في قائمة متابعات المستخدم
+    const idx = db.cur.following.indexOf(chId);
+
+    if (idx === -1) {
+        // إذا لم تكن موجودة -> أضفها (متابعة)
+        db.cur.following.push(chId);
+        toast("تمت المتابعة ✅");
+    } else {
+        // إذا كانت موجودة -> احذفها (إلغاء متابعة)
+        db.cur.following.splice(idx, 1);
+        toast("تم إلغاء المتابعة");
+    }
+
+    // 4. حفظ التغييرات في ذاكرة المتصفح (localStorage)
+    // ملاحظة: لا نستخدم saveDB() هنا لأننا لا نريد تغيير بيانات القناة العامة في السحاب
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+
+    // 5. تحديث الشاشة فوراً لرؤية التغيير في شكل الزر
+    renderDiscover();
+}
 
     function renderNews() {
         let all = [];
