@@ -307,19 +307,30 @@
     };
 
 function saveDB() {
-    // 1. حفظ البيانات في ذاكرة المتصفح المؤقتة
     localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-    
-    // 2. إرسال البيانات فوراً إلى السحاب (Firebase)
-    // تأكدنا أن المسار هو 'awadeed_app_data' لكي تظهر القنوات للجميع
-    database.ref('awadeed_app_data').set(db)
-        .then(() => {
-            console.log("تمت المزامنة مع السحاب بنجاح ✅");
-        })
-        .catch((error) => {
-            console.error("خطأ في المزامنة: ", error);
-        });
+    // تغيير الاسم هنا إلى awadeed_app_data
+    database.ref('awadeed_app_data').set(db); 
 }
+
+// تغيير الاسم هنا أيضاً إلى awadeed_app_data
+database.ref('awadeed_app_data').on('value', (snapshot) => {
+    const cloudData = snapshot.val();
+    if (cloudData) {
+        db = cloudData;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+        
+        // تحديث الشاشة فوراً عند كل الناس
+        if (db.cur) {
+            const activeScreen = document.querySelector('.screen.active');
+            if (activeScreen) {
+                if (activeScreen.id === 'scr-discover') renderDiscover();
+                if (activeScreen.id === 'scr-news') renderNews();
+                if (activeScreen.id === 'scr-chat') renderMessages();
+            }
+        }
+    }
+});
+
 function toast(m) { const n = document.getElementById('notif-bar'); n.innerText = m; n.className = 'notif show'; setTimeout(() => n.className = 'notif', 3000); }
     function toggleAuth(m) { document.getElementById('login-form').style.display = m === 'login' ? 'block' : 'none'; document.getElementById('reg-form').style.display = m === 'reg' ? 'block' : 'none'; }
 
