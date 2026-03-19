@@ -249,17 +249,31 @@
     }
 </style>
 
-    <div id="scr-admin" class="screen">
-        <h1>لوحة الإدارة</h1>
-        <div class="card"><p id="storage-info">تحميل الإحصائيات...</p></div>
-        <div class="table-res card">
-            <table id="adm-ch-tbl"></table>-
+<div id="scr-admin" class="screen">
+    <h1>لوحة الإدارة</h1>
+    <div class="card"><p id="storage-info">تحميل الإحصائيات...</p></div>
+    <div class="table-res card">
+        <table id="adm-ch-tbl" style="width:100%; text-align:right;"></table>
+    </div>
+</div>
+
+<div id="scr-chat" class="screen">
+    <div id="chat-head" class="card" style="display:flex; justify-content:space-between; align-items:center; padding:10px;">
+        </div>
+    
+    <div id="chat-msgs" class="chat-msgs" style="height:400px; overflow-y:auto; background:var(--input); border-radius:15px; padding:15px; margin-bottom:15px; border:1px solid var(--border);">
+        </div>
+
+    <div id="chat-bar" class="card" style="display:none;">
+        <input id="chat-input" placeholder="اكتب خبراً جديداً...">
+        <div style="display:flex; gap:10px; margin-top:10px;">
+            <button class="btn" style="flex:2" onclick="sendToChannel('text')">نشر نص</button>
+            <button class="btn btn-sm" style="flex:1" onclick="sendToChannel('image_link')">رابط صورة</button>
         </div>
     </div>
 </div>
 
-<div id="modal-wrap" class="modal"><div class="card" id="modal-body" style="width:95%; max-width:400px;"></div></div>
-
+</div> <div id="modal-wrap" class="modal"><div class="card" id="modal-body" style="width:95%; max-width:400px;"></div></div>
 <script>
     const STORAGE_KEY = 'Rawadeed_Bhr_App_v3';
     let db = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
@@ -409,16 +423,32 @@ function navTo(scr) {
             </div>`).join('') || "لا توجد أخبار";
     }
 
-    let activeChID = null;
-    function openChannelChat(id) {
-        activeChID = id;
-        const ch = db.channels.find(x => x.id === id);
-        navTo('chat');
-        const isOwner = ch.o === db.cur.id;
-        document.getElementById('chat-head').innerHTML = `<span>${ch.n}</span>` + (isOwner ? `<i class="fas fa-cog" onclick="openModal('edit-ch', ${ch.id})"></i>` : '');
-        document.getElementById('chat-bar').style.display = isOwner ? 'block' : 'none';
-        renderMessages();
-    }
+let activeChID = null; // متغير لتخزين القناة المفتوحة حالياً
+
+function openChannelChat(id) {
+    activeChID = id;
+    const ch = db.channels.find(x => x.id === id);
+    if (!ch) return;
+
+    // أهم سطر: نفتح شاشة المحادثة
+    navTo('chat');
+
+    // هل أنا صاحب القناة؟
+    const isOwner = String(ch.o) === String(db.cur.id);
+    
+    // وضع اسم القناة وزر العودة في الأعلى
+    document.getElementById('chat-head').innerHTML = `
+        <button class="btn btn-sm" onclick="navTo('discover')">⬅ عودة</button>
+        <strong style="color:var(--accent)">${ch.n}</strong>
+        <span></span>
+    `;
+    
+    // إظهار بار النشر فقط إذا كنت أنا المالك
+    document.getElementById('chat-bar').style.display = isOwner ? 'block' : 'none';
+    
+    // عرض رسائل القناة
+    renderMessages();
+}
 
     function renderMessages() {
         const ch = db.channels.find(x => x.id === activeChID);
