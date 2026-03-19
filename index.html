@@ -307,10 +307,20 @@
     };
 
 function saveDB() {
+    // 1. حفظ البيانات في ذاكرة المتصفح المؤقتة
     localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-    database.ref('awadeed_app_data').set(db); 
+    
+    // 2. إرسال البيانات فوراً إلى السحاب (Firebase)
+    // تأكدنا أن المسار هو 'awadeed_app_data' لكي تظهر القنوات للجميع
+    database.ref('awadeed_app_data').set(db)
+        .then(() => {
+            console.log("تمت المزامنة مع السحاب بنجاح ✅");
+        })
+        .catch((error) => {
+            console.error("خطأ في المزامنة: ", error);
+        });
 }
-    function toast(m) { const n = document.getElementById('notif-bar'); n.innerText = m; n.className = 'notif show'; setTimeout(() => n.className = 'notif', 3000); }
+function toast(m) { const n = document.getElementById('notif-bar'); n.innerText = m; n.className = 'notif show'; setTimeout(() => n.className = 'notif', 3000); }
     function toggleAuth(m) { document.getElementById('login-form').style.display = m === 'login' ? 'block' : 'none'; document.getElementById('reg-form').style.display = m === 'reg' ? 'block' : 'none'; }
 
 function handleLogin() {
