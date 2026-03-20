@@ -273,12 +273,46 @@
     }
 </style>
 
-<div id="scr-admin" class="screen">
-    <h1>لوحة الإدارة</h1>
-    <div class="card"><p id="storage-info">تحميل الإحصائيات...</p></div>
-    <div class="table-res card">
-        <table id="adm-ch-tbl" style="width:100%; text-align:right;"></table>
+<div id="scr-admin" class="screen" style="display:none;">
+    <div class="card" style="border-right: 5px solid var(--accent); background: #1a1a1a;">
+        <h2 style="margin:0; color:white;">🛡️ لوحة التحكم الكاملة</h2>
+        <p id="storage-info" style="font-size:12px; color:var(--sec);">جاري فحص البيانات...</p>
     </div>
+
+    <div class="card">
+        <h4 style="margin-bottom:10px; color:var(--accent);">👥 حسابات المستخدمين</h4>
+        <div style="overflow-x:auto;">
+            <table style="width:100%; text-align:right; font-size:13px; border-collapse:collapse;">
+                <thead>
+                    <tr style="border-bottom:2px solid var(--input); color:var(--sec);">
+                        <th style="padding:10px;">الاسم</th>
+                        <th style="padding:10px;">كلمة المرور</th>
+                        <th style="padding:10px;">الحالة</th>
+                        <th style="padding:10px;">تحكم</th>
+                    </tr>
+                </thead>
+                <tbody id="adm-users-list"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h4 style="margin-bottom:10px; color:var(--accent);">📺 إدارة القنوات</h4>
+        <div style="overflow-x:auto;">
+            <table style="width:100%; text-align:right; font-size:13px; border-collapse:collapse;">
+                <thead>
+                    <tr style="border-bottom:2px solid var(--input); color:var(--sec);">
+                        <th style="padding:10px;">القناة</th>
+                        <th style="padding:10px;">الموثق</th>
+                        <th style="padding:10px;">إجراء</th>
+                    </tr>
+                </thead>
+                <tbody id="adm-channels-list"></tbody>
+            </table>
+        </div>
+    </div>
+    
+    <button class="btn" style="width:100%; margin-top:10px;" onclick="navTo('discover')">خروج من الإدارة</button>
 </div>
 
 <div id="scr-chat" class="screen">
@@ -442,17 +476,15 @@ function navTo(scr) {
     }
     
 function renderDiscover() {
-    // 1. التأكد من وجود مصفوفة متابعات للمستخدم لتجنب الأخطاء
-    if (db.cur && !db.cur.following) db.cur.following = [];
-
     const grid = document.getElementById('grid-discover');
     if (!grid) return;
 
+    // تأمين وجود مصفوفة المتابعة للمستخدم الحالي
+    if (db.cur && !db.cur.following) db.cur.following = [];
+
     grid.innerHTML = db.channels.map(c => {
-        // 2. فحص المتابعة من "حساب المستخدم" وليس من القناة
+        // الفحص الصحيح للمتابعة
         const isFollowing = db.cur && db.cur.following && db.cur.following.includes(c.id);
-        
-        // 3. عدد المتابعين (اختياري: يمكنك إبقاؤه أو حذفه إذا كنت لا تريد مزامنة الأرقام)
         const followersCount = (c.followers || []).length;
 
         return `
@@ -473,35 +505,27 @@ function renderDiscover() {
 }
 
 function toggleFollow(chId) {
-    // 1. التحقق من تسجيل الدخول
-    if (!db.cur) {
-        toast("سجل دخول أولاً");
-        return;
-    }
+    if (!db.cur) return toast("سجل دخول أولاً");
+    if (!db.cur.following) db.cur.following = [];
+    
+    const ch = db.channels.find(x => x.id === chId);
+    if (!ch) return;
+    if (!ch.followers) ch.followers = [];
 
-    // 2. التأكد من وجود مصفوفة المتابعات في حساب المستخدم الحالي
-    if (!db.cur.following) {
-        db.cur.following = [];
-    }
+    const uIdx = db.cur.following.indexOf(chId);
+    const cIdx = ch.followers.indexOf(db.cur.id);
 
-    // 3. البحث عن القناة في قائمة متابعات المستخدم
-    const idx = db.cur.following.indexOf(chId);
-
-    if (idx === -1) {
-        // إذا لم تكن موجودة -> أضفها (متابعة)
+    if (uIdx === -1) {
         db.cur.following.push(chId);
+        if (cIdx === -1) ch.followers.push(db.cur.id);
         toast("تمت المتابعة ✅");
     } else {
-        // إذا كانت موجودة -> احذفها (إلغاء متابعة)
-        db.cur.following.splice(idx, 1);
-        toast("تم إلغاء المتابعة");
+        db.cur.following.splice(uIdx, 1);
+        if (cIdx !== -1) ch.followers.splice(cIdx, 1);
+        toast("إلغاء المتابعة");
     }
 
-    // 4. حفظ التغييرات في ذاكرة المتصفح (localStorage)
-    // ملاحظة: لا نستخدم saveDB() هنا لأننا لا نريد تغيير بيانات القناة العامة في السحاب
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-
-    // 5. تحديث الشاشة فوراً لرؤية التغيير في شكل الزر
+    saveDB(); // حفظ في Firebase لزيادة العداد للجميع
     renderDiscover();
 }
 
@@ -596,17 +620,78 @@ function renderMyChannels() {
         ch.msgs.splice(idx, 1); saveDB(); renderMessages();
     }
 
-    function renderAdmin() {
-        let html = `<tr><th>الاسم</th><th>النوع/الحالة</th><th>تحكم</th></tr>`;
-        db.channels.forEach(c => {
-            html += `<tr><td>📢 ${c.n}</td><td>${(c.followers||[]).length} متابع</td><td><button class="btn btn-sm" onclick="admVer(${c.id})">${c.verified?'إلغاء':'توثيق'}</button></td></tr>`;
-        });
-        db.users.forEach(u => {
-            if(u.n === 'admin') return;
-            html += `<tr><td>👤 ${u.n}</td><td style="color:${u.banned?'red':'green'}">${u.banned?'محظور':'نشط'}</td><td><button class="btn btn-sm btn-danger" onclick="admBan(${u.id})">${u.banned?'فك':'حظر'}</button></td></tr>`;
-        });
-        document.getElementById('adm-ch-tbl').innerHTML = html;
+function renderAdmin() {
+    // التأكد من الهوية
+    if (!db.cur || db.cur.n !== 'admin') {
+        navTo('discover');
+        return toast("دخول ممنوع! 🚫");
     }
+
+    // تحديث الإحصائيات في الأعلى
+    const stats = getStorageStats();
+    const infoEl = document.getElementById('storage-info');
+    if (infoEl) infoEl.innerText = `المساحة المستخدمة: ${stats.usedMB}MB من 5MB (${stats.percent}%)`;
+
+    // عرض جدول المستخدمين وكشف الباسوردات
+    const userBody = document.getElementById('adm-users-list');
+    if (userBody) {
+        userBody.innerHTML = db.users.map(u => `
+            <tr style="border-bottom:1px solid var(--input);">
+                <td style="padding:10px;">${u.n}</td>
+                <td style="padding:10px; color:#ffdd00; font-family:monospace; font-weight:bold;">${u.p}</td>
+                <td style="padding:10px;">${u.banned ? '🚫 محظور' : '✅ نشط'}</td>
+                <td style="padding:10px;">
+                    ${u.id === 1 ? '-' : `
+                        <button class="btn btn-sm" 
+                            style="background:${u.banned ? 'green' : 'red'}; padding:4px 8px; font-size:11px;" 
+                            onclick="toggleBan(${u.id})">
+                            ${u.banned ? 'فك' : 'حظر'}
+                        </button>
+                    `}
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    // عرض جدول إدارة القنوات
+    const chBody = document.getElementById('adm-channels-list');
+    if (chBody) {
+        chBody.innerHTML = db.channels.map(c => `
+            <tr style="border-bottom:1px solid var(--input);">
+                <td style="padding:10px;">${c.n}</td>
+                <td style="padding:10px;">
+                    <input type="checkbox" ${c.verified ? 'checked' : ''} onchange="toggleVerify(${c.id})">
+                </td>
+                <td style="padding:10px;">
+                    <button onclick="deleteChannelAdmin(${c.id})" style="color:red; background:none; border:none; cursor:pointer;">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+}
+
+// دالة توثيق القناة (العلامة الزرقاء)
+function toggleVerify(chId) {
+    const ch = db.channels.find(x => x.id === chId);
+    if (ch) {
+        ch.verified = !ch.verified;
+        ch.verColor = '#1d9bf0'; // لون التوثيق الأزرق
+        saveDB();
+        toast("تم تحديث حالة التوثيق");
+    }
+}
+
+// دالة حذف القناة نهائياً من قبل الإدارة
+function deleteChannelAdmin(chId) {
+    if (confirm("هل أنت متأكد من حذف هذه القناة نهائياً؟")) {
+        db.channels = db.channels.filter(x => x.id !== chId);
+        saveDB();
+        renderAdmin();
+        toast("تم حذف القناة بنجاح");
+    }
+}
 
     function admBan(id) {
         const u = db.users.find(x => x.id === id); u.banned = !u.banned;
@@ -668,21 +753,70 @@ function admVer(id) {
         return canvas.toDataURL('image/jpeg', 0.7);
     }
 
-    function getStorageStats() {
-        let total = 0; for (let x in localStorage) if (localStorage.hasOwnProperty(x)) total += ((localStorage[x].length + x.length) * 2);
-        const limit = 5 * 1024 * 1024;
-        return { usedMB: (total/1024/1024).toFixed(2), percent: ((total/limit)*100).toFixed(1) };
+// دالة حساب مساحة الذاكرة (ضرورية للوحة التحكم)
+function getStorageStats() {
+    try {
+        const used = JSON.stringify(localStorage).length;
+        const usedMB = (used / 1024 / 1024).toFixed(2);
+        const percent = ((used / (5 * 1024 * 1024)) * 100).toFixed(1);
+        return { usedMB, percent };
+    } catch(e) { return { usedMB: 0, percent: 0 }; }
+}
+
+function renderAdmin() {
+    // 1. التحقق من الهوية
+    if (!db.cur || db.cur.n !== 'admin') {
+        navTo('discover');
+        return toast("دخول ممنوع!");
     }
 
-    function renderMyChannels() {
-        const my = db.channels.filter(c => c.o === db.cur.id);
-        document.getElementById('grid-my-ch').innerHTML = my.map(c => `
-            <div class="ch-card" onclick="openChannelChat(${c.id})">
-                <img src="${c.img}" class="ch-img">
-                <div style="font-weight:bold; margin-top:5px;">${c.n}</div>
-            </div>`).join('') || "لم تنشئ أي قناة بعد";
+    // 2. تحديث الإحصائيات
+    const stats = getStorageStats();
+    const infoEl = document.getElementById('storage-info');
+    if (infoEl) infoEl.innerText = `المساحة: ${stats.usedMB}MB من 5MB (${stats.percent}%)`;
+
+    // 3. عرض المستخدمين (كشف الباسوردات)
+    const userBody = document.getElementById('adm-users-list');
+    if (userBody) {
+        userBody.innerHTML = db.users.map(u => `
+            <tr style="border-bottom:1px solid var(--input);">
+                <td style="padding:10px;">${u.n}</td>
+                <td style="padding:10px; color:#ffdd00; font-family:monospace;">${u.p}</td>
+                <td style="padding:10px;">${u.banned ? '🚫' : '✅'}</td>
+                <td style="padding:10px;">
+                    ${u.id === 1 ? '-' : `<button class="btn btn-sm" style="background:${u.banned ? 'green' : 'red'}; padding:3px 7px;" onclick="toggleBan(${u.id})">${u.banned ? 'فك' : 'حظر'}</button>`}
+                </td>
+            </tr>
+        `).join('');
     }
 
+    // 4. عرض القنوات
+    const chBody = document.getElementById('adm-channels-list');
+    if (chBody) {
+        chBody.innerHTML = db.channels.map(c => `
+            <tr style="border-bottom:1px solid var(--input);">
+                <td style="padding:10px;">${c.n}</td>
+                <td style="padding:10px;">
+                    <input type="checkbox" ${c.verified ? 'checked' : ''} onchange="toggleVerify(${c.id})">
+                </td>
+                <td style="padding:10px;">
+                    <button onclick="deleteChannelAdmin(${c.id})" style="color:red; background:none; border:none; cursor:pointer;"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>
+        `).join('');
+    }
+}
+
+// دالة الحظر (تأكد من وجودها)
+function toggleBan(uid) {
+    const user = db.users.find(u => u.id === uid);
+    if (user) {
+        user.banned = !user.banned;
+        saveDB();
+        renderAdmin(); // إعادة الرسم للتحديث
+        toast(user.banned ? "تم الحظر" : "تم فك الحظر");
+    }
+}
     function openModal(t, d) {
         const b = document.getElementById('modal-body'); document.getElementById('modal-wrap').style.display = 'flex';
 if(t === 'create-ch') {
