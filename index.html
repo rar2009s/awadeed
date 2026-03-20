@@ -440,31 +440,56 @@ function navTo(scr) {
         // ملاحظة: صفحة 'help' لا تحتاج دالة render لأن محتواها ثابت (نصوص فقط)
     }
     
-    function renderDiscover() {
-        document.getElementById('grid-discover').innerHTML = db.channels.map(c => {
-            const isFollowing = (c.followers || []).includes(db.cur.id);
-            return `
-                <div class="ch-card">
-                    <img src="${c.img}" class="ch-img" onclick="openChannelChat(${c.id})">
-                    <div style="font-weight:bold; margin-top:5px;">
-                        ${c.n} ${c.verified ? `<i class="fas fa-check-circle" style="color:${c.verColor}"></i>` : ''}
-                    </div>
-                    <div style="font-size:11px; color:var(--sec); margin-bottom:8px;">${(c.followers || []).length} متابع</div>
-                    <button class="btn btn-sm" style="width:100%; background:${isFollowing ? 'var(--input)' : 'var(--accent)'}" onclick="toggleFollow(${c.id})">
-                        ${isFollowing ? 'إلغاء المتابعة' : 'متابعة'}
-                    </button>
-                </div>`;
-        }).join('') || "لا توجد قنوات حالياً";
+function renderDiscover() {
+    const grid = document.getElementById('grid-discover');
+    if (!grid) return; // تأمين الكود من الخطأ
+
+    grid.innerHTML = db.channels.map(c => {
+        // تأكد أننا نقارن ID المستخدم الحالي مع الموجود في مصفوفة المتابعين
+        const followersList = c.followers || [];
+        const isFollowing = followersList.includes(db.cur.id); 
+
+        return `
+            <div class="ch-card">
+                <img src="${c.img || 'default.png'}" class="ch-img" onclick="openChannelChat(${c.id})">
+                <div style="font-weight:bold; margin-top:5px;">
+                    ${c.n} ${c.verified ? `<i class="fas fa-check-circle" style="color:${c.verColor}"></i>` : ''}
+                </div>
+                <div style="font-size:11px; color:var(--sec); margin-bottom:8px;">
+                    ${followersList.length} متابع
+                </div>
+                <button class="btn btn-sm" 
+                        style="width:100%; background:${isFollowing ? 'var(--input)' : 'var(--accent)'}" 
+                        onclick="toggleFollow(${c.id})">
+                    ${isFollowing ? 'إلغاء المتابعة' : 'متابعة'}
+                </button>
+            </div>`;
+    }).join('') || "لا توجد قنوات حالياً";
+}
+
+function toggleFollow(chId) {
+    // 1. البحث عن القناة بواسطة الـ ID
+    const ch = db.channels.find(c => c.id === chId);
+    if (!ch) return;
+
+    // 2. التأكد من وجود مصفوفة المتابعين
+    if (!ch.followers) ch.followers = [];
+
+    // 3. البحث عن معرف المستخدم الحالي (id) في القائمة
+    const idx = ch.followers.indexOf(db.cur.id);
+
+    if (idx === -1) {
+        ch.followers.push(db.cur.id); // إضافة الـ ID للمتابعة
+    } else {
+        ch.followers.splice(idx, 1); // إزالة الـ ID لإلغاء المتابعة
     }
 
-    function toggleFollow(chId) {
-        const ch = db.channels.find(c => c.id === chId);
-        if (!ch.followers) ch.followers = [];
-        const idx = ch.followers.indexOf(db.cur.id);
-        if (idx === -1) ch.followers.push(db.cur.id);
-        else ch.followers.splice(idx, 1);
-        saveDB(); renderDiscover();
-    }
+    // 4. الحفظ والإرسال للسحاب (Firebase) فوراً
+    saveDB(); 
+    
+    // 5. تحديث الشاشة المحلية
+    renderDiscover();
+}
 
     function renderNews() {
         let all = [];
