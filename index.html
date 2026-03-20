@@ -353,12 +353,14 @@ let db = localData || {
 localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
 
 function saveDB() {
-    // حفظ في جهازك
+    // 1. حفظ في جهازك
     localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
     
-    // إرسال للسحاب (تأكد من اسم المسار awadeed_app_data)
-    if (typeof database !== 'undefined') {
-        database.ref('awadeed_app_data').set(db);
+    // 2. إرسال للسحاب (تأكد أن اسم المسار هو awadeed_app_data)
+    if (window.database) {
+        database.ref('awadeed_app_data').set(db)
+        .then(() => console.log("تم التحديث في السحاب ✅"))
+        .catch(err => console.error("خطأ في السحاب: ", err));
     }
 }
 
@@ -490,8 +492,7 @@ function renderDiscover() {
     grid.innerHTML = db.channels.map(c => {
         // الفحص الصحيح للمتابعة
         const isFollowing = db.cur && db.cur.following && db.cur.following.includes(c.id);
-        const followersCount = (c.followers || []).length;
-
+const followersCount = (c.followers || []).length; //
         return `
             <div class="ch-card">
                 <img src="${c.img}" class="ch-img" onclick="openChannelChat(${c.id})">
@@ -767,10 +768,9 @@ function admVer(id) {
 // دالة حساب مساحة الذاكرة (ضرورية للوحة التحكم)
 function getStorageStats() {
     try {
-        const used = JSON.stringify(localStorage).length;
-        const usedMB = (used / 1024 / 1024).toFixed(2);
-        const percent = ((used / (5 * 1024 * 1024)) * 100).toFixed(1);
-        return { usedMB, percent };
+        let used = JSON.stringify(localStorage).length;
+        let usedMB = (used / 1024 / 1024).toFixed(2);
+        return { usedMB, percent: Math.round((used / 5242880) * 100) };
     } catch(e) { return { usedMB: 0, percent: 0 }; }
 }
 
