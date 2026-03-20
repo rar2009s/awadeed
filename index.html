@@ -274,10 +274,12 @@
 </style>
 
 <div id="scr-admin" class="screen" style="display:none;">
-    <div class="card" style="border-right: 5px solid var(--accent); background: #1a1a1a;">
-        <h2 style="margin:0; color:white;">🛡️ لوحة التحكم الكاملة</h2>
-        <p id="storage-info" style="font-size:12px; color:var(--sec);">جاري فحص البيانات...</p>
-    </div>
+    <div class="card">
+        <h3>🛡️ لوحة الإدارة</h3>
+        <p id="storage-info"></p> <h4>👥 المستخدمين</h4>
+        <table><tbody id="adm-users-list"></tbody></table> <h4>📺 القنوات</h4>
+        <table><tbody id="adm-channels-list"></tbody></table> </div>
+</div>
 
     <div class="card">
         <h4 style="margin-bottom:10px; color:var(--accent);">👥 حسابات المستخدمين</h4>
@@ -512,27 +514,37 @@ const followersCount = (c.followers || []).length; //
 
 function toggleFollow(chId) {
     if (!db.cur) return toast("سجل دخول أولاً");
-    
-    // تأمين وجود مصفوفة المتابعة للمستخدم وللقناة
-    if (!db.cur.following) db.cur.following = [];
+
+    // البحث عن القناة
     const ch = db.channels.find(x => x.id === chId);
     if (!ch) return;
+    
+    // تأمين المصفوفات
     if (!ch.followers) ch.followers = [];
+    if (!db.cur.following) db.cur.following = [];
 
-    const uIdx = db.cur.following.indexOf(chId);
-    const cIdx = ch.followers.indexOf(db.cur.id);
+    const userIdx = db.cur.following.indexOf(chId);
+    const chIdx = ch.followers.indexOf(db.cur.id);
 
-    if (uIdx === -1) {
-        // --- حالة المتابعة ---
-        db.cur.following.push(chId); // تضاف لحسابك
-        if (cIdx === -1) ch.followers.push(db.cur.id); // تضاف للقناة (عشان الكل يشوف الزيادة)
+    if (userIdx === -1) {
+        // متابعة
+        db.cur.following.push(chId);
+        if (chIdx === -1) ch.followers.push(db.cur.id);
         toast("تمت المتابعة ✅");
     } else {
-        // --- حالة إلغاء المتابعة ---
-        db.cur.following.splice(uIdx, 1); // تحذف من حسابك
-        if (cIdx !== -1) ch.followers.splice(cIdx, 1); // تحذف من القناة (عشان ينقص العداد للكل)
+        // إلغاء متابعة
+        db.cur.following.splice(userIdx, 1);
+        if (chIdx !== -1) ch.followers.splice(chIdx, 1);
         toast("إلغاء المتابعة");
     }
+
+    // 🔥 تحديث نسخة المستخدم داخل مصفوفة المستخدمين الكبرى قبل الحفظ
+    const userInDb = db.users.find(u => u.id === db.cur.id);
+    if (userInDb) userInDb.following = db.cur.following;
+
+    saveDB(); // الحفظ في Firebase
+    renderDiscover(); // تحديث الشاشة
+}
 
     // 🔴 أهم خطوة: الحفظ في Firebase فوراً
     saveDB(); 
@@ -633,55 +645,46 @@ function renderMyChannels() {
     }
 
 function renderAdmin() {
-    // التأكد من الهوية
+    // 1. فحص هل المستخدم admin؟
     if (!db.cur || db.cur.n !== 'admin') {
         navTo('discover');
-        return toast("دخول ممنوع! 🚫");
+        return toast("دخول ممنوع!");
     }
 
-    // تحديث الإحصائيات في الأعلى
-    const stats = getStorageStats();
-    const infoEl = document.getElementById('storage-info');
-    if (infoEl) infoEl.innerText = `المساحة المستخدمة: ${stats.usedMB}MB من 5MB (${stats.percent}%)`;
+    // 2. محاولة رسم جدول المستخدمين
+    try {
+        const userBody = document.getElementById('adm-users-list');
+        if (userBody) {
+            userBody.innerHTML = db.users.map(u => `
+                <tr style="border-bottom:1px solid #333;">
+                    <td style="padding:10px;">${u.n || 'بدون اسم'}</td>
+                    <td style="padding:10px; color:#ffdd00;">${u.p || '****'}</td>
+                    <td style="padding:10px;">${u.banned ? '🚫' : '✅'}</td>
+                    <td style="padding:10px;">
+                        <button class="btn btn-sm" onclick="toggleBan(${u.id})">حظر</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+    } catch (e) { console.error("خطأ في جدول المستخدمين:", e); }
 
-    // عرض جدول المستخدمين وكشف الباسوردات
-    const userBody = document.getElementById('adm-users-list');
-    if (userBody) {
-        userBody.innerHTML = db.users.map(u => `
-            <tr style="border-bottom:1px solid var(--input);">
-                <td style="padding:10px;">${u.n}</td>
-                <td style="padding:10px; color:#ffdd00; font-family:monospace; font-weight:bold;">${u.p}</td>
-                <td style="padding:10px;">${u.banned ? '🚫 محظور' : '✅ نشط'}</td>
-                <td style="padding:10px;">
-                    ${u.id === 1 ? '-' : `
-                        <button class="btn btn-sm" 
-                            style="background:${u.banned ? 'green' : 'red'}; padding:4px 8px; font-size:11px;" 
-                            onclick="toggleBan(${u.id})">
-                            ${u.banned ? 'فك' : 'حظر'}
-                        </button>
-                    `}
-                </td>
-            </tr>
-        `).join('');
-    }
-
-    // عرض جدول إدارة القنوات
-    const chBody = document.getElementById('adm-channels-list');
-    if (chBody) {
-        chBody.innerHTML = db.channels.map(c => `
-            <tr style="border-bottom:1px solid var(--input);">
-                <td style="padding:10px;">${c.n}</td>
-                <td style="padding:10px;">
-                    <input type="checkbox" ${c.verified ? 'checked' : ''} onchange="toggleVerify(${c.id})">
-                </td>
-                <td style="padding:10px;">
-                    <button onclick="deleteChannelAdmin(${c.id})" style="color:red; background:none; border:none; cursor:pointer;">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </td>
-            </tr>
-        `).join('');
-    }
+    // 3. محاولة رسم جدول القنوات
+    try {
+        const chBody = document.getElementById('adm-channels-list');
+        if (chBody) {
+            chBody.innerHTML = db.channels.map(c => `
+                <tr style="border-bottom:1px solid #333;">
+                    <td style="padding:10px;">${c.n || 'قناة بدون اسم'}</td>
+                    <td style="padding:10px;">
+                        <input type="checkbox" ${c.verified ? 'checked' : ''} onchange="toggleVerify(${c.id})">
+                    </td>
+                    <td style="padding:10px;">
+                        <button onclick="deleteChannelAdmin(${c.id})" style="color:red; background:none; border:none;">🗑️</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+    } catch (e) { console.error("خطأ في جدول القنوات:", e); }
 }
 
 // دالة توثيق القناة (العلامة الزرقاء)
@@ -768,9 +771,10 @@ function admVer(id) {
 // دالة حساب مساحة الذاكرة (ضرورية للوحة التحكم)
 function getStorageStats() {
     try {
-        let used = JSON.stringify(localStorage).length;
-        let usedMB = (used / 1024 / 1024).toFixed(2);
-        return { usedMB, percent: Math.round((used / 5242880) * 100) };
+        const used = JSON.stringify(localStorage).length;
+        const usedMB = (used / 1024 / 1024).toFixed(2);
+        const percent = Math.min(100, ((used / 5242880) * 100).toFixed(1));
+        return { usedMB, percent };
     } catch(e) { return { usedMB: 0, percent: 0 }; }
 }
 
