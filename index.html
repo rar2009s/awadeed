@@ -306,18 +306,40 @@
         cur: null
     };
 
+// 1. دالة الحفظ: تحفظ للهاتف نسخة كاملة، ولالسحاب نسخة بدون "المستخدم الحالي"
 function saveDB() {
-    // 1. الحفظ في ذاكرة المتصفح (عشان السرعة)
+    // حفظ في ذاكرة الهاتف (التلفون الحالي يعرف من المستخدم)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
 
-    // 2. الحفظ في Firebase (عشان الكل يشوف القنوات والأخبار)
-    // نستخدم 'set' لتحديث قاعدة البيانات بالكامل
-    database.ref('awadeed_app_data').set(db)
-    .then(() => {
-        console.log("تم المزامنة مع السحاب بنجاح ✅");
-    })
-    .catch((error) => {
-        console.error("خطأ في المزامنة: ", error);
+    // تحضير نسخة للسحاب بدون المستخدم الحالي لمنع تداخل التلفونات
+    if (window.database) {
+        let cloudData = JSON.parse(JSON.stringify(db)); 
+        cloudData.cur = null; // أهم سطر: مسح المستخدم من نسخة السحاب ليبقى كل تلفون مستقل
+        
+        database.ref('awadeed_app_data').set(cloudData)
+        .then(() => console.log("تم المزامنة السحابية ✅"))
+        .catch(err => console.error("خطأ: ", err));
+    }
+}
+
+// 2. دالة المزامنة: (تعمل مرة واحدة فقط خارج كل الدوال)
+if (window.database) {
+    database.ref('awadeed_app_data').on('value', (snapshot) => {
+        const cloudData = snapshot.val();
+        if (cloudData) {
+            const myLocalUser = db.cur; // احتفظ بالمستخدم المسجل في هذا التلفون
+            db = cloudData;
+            db.cur = myLocalUser; // أعد المستخدم لمكانه بعد التحديث من السحاب
+            
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+            
+            // تحديث الشاشة تلقائياً إذا كان المستخدم فاتح القنوات أو الأخبار
+            if (db.cur) {
+                const activeScreen = document.querySelector('.screen.active');
+                if (activeScreen && activeScreen.id === 'scr-discover') renderDiscover();
+                if (activeScreen && activeScreen.id === 'scr-news') renderNews();
+            }
+        }
     });
 }
 function toast(m) { const n = document.getElementById('notif-bar'); n.innerText = m; n.className = 'notif show'; setTimeout(() => n.className = 'notif', 3000); }
@@ -362,43 +384,28 @@ function handleLogin() {
     }
 
 function run() {
-    // 1. كود الإصلاح التلقائي للبيانات لضمان عدم تعليق الحساب
     if (!db.channels) db.channels = [];
-    db.channels.forEach(c => {
-        if (!c.verColor) c.verColor = '#1d9bf0'; 
-        if (!c.followers) c.followers = [];
-    });
-    saveDB();
-
-    // 2. إخفاء صفحة الدخول وإظهار واجهة التطبيق
     document.getElementById('auth-page').style.display = 'none';
     document.getElementById('app-side').style.display = 'flex';
     document.getElementById('app-main').style.display = 'block';
 
-    // 3. التحقق من رتبة الآدمن (Admin)
     if (db.cur.n === 'admin') {
         const adminBtn = document.getElementById('btn-admin');
         if (adminBtn) adminBtn.style.display = 'flex';
     }
 
-    // 4. عرض اسم المستخدم في صفحة البروفايل
-    const displayUser = document.getElementById('display-username');
-    if (displayUser) {
-        displayUser.innerText = "مرحباً، " + db.cur.n;
-    }
-
-    // 5. تعطيل التعامل مع صورة البروفايل (لأننا حذفناها)
-    // حذفنا سطر (document.getElementById('p-view-img').src = ...) لأنه يسبب المشكلة
-
-    // 6. عرض تاريخ الانضمام
-    const joinDate = document.getElementById('join-date-display');
-    if (joinDate) {
-        joinDate.innerText = "عضو منذ: " + (db.cur.date || "2026");
-    }
-
-    // 7. التوجه لصفحة الاكتشاف عند الدخول
-    navTo('discover');
+    navTo('discover'); // اتركها في النهاية
 }
+
+// دالة تسجيل الخروج: تمسح الحساب من الهاتف وتعود لصفحة الدخول
+function handleLogout() {
+    if (confirm("هل أنت متأكد من تسجيل الخروج؟")) {
+        db.cur = null; // مسح المستخدم الحالي
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); // حفظ الحالة فارغة
+        location.reload(); // إعادة تحميل التطبيق لإظهار صفحة Login
+    }
+}
+
 function navTo(scr) {
         // 1. إخفاء كل الشاشات أولاً
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
