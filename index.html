@@ -299,16 +299,27 @@
 
 </div> <div id="modal-wrap" class="modal"><div class="card" id="modal-body" style="width:95%; max-width:400px;"></div></div>
 <script>
-    const STORAGE_KEY = 'Rawadeed_Bhr_App_v3';
-    let db = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
-        users: [{id: 1, n: 'admin', p: 'KarAly09', img: '', banned: false, date: '2026-01-01'}],
-        channels: [],
-        cur: null
-    };
+const STORAGE_KEY = 'Rawadeed_Bhr_App_v3';
+
+// قراءة البيانات من المتصفح
+let localData = JSON.parse(localStorage.getItem(STORAGE_KEY));
+
+// إذا كانت البيانات موجودة، نصفر المستخدم الحالي 'cur' لضمان طلب تسجيل الدخول
+if (localData) {
+    localData.cur = null; 
+}
+
+let db = localData || {
+    users: [{id: 1, n: 'admin', p: 'KarAly09', img: '', banned: false, date: '2026-01-01'}],
+    channels: [],
+    cur: null
+};
+
+// حفظ الحالة الجديدة (بدون مستخدم مسجل)
+localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
 
 function saveDB() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-    // تغيير الاسم هنا إلى awadeed_app_data
     database.ref('awadeed_app_data').set(db); 
 }
 
