@@ -639,64 +639,61 @@ function renderMyChannels() {
         </div>`).join('');
 }
 
-    function deleteMessage(idx) {
+function deleteMessage(idx) {
         const ch = db.channels.find(x => x.id === activeChID);
-        ch.msgs.splice(idx, 1); saveDB(); renderMessages();
+        if (ch) {
+            ch.msgs.splice(idx, 1); 
+            saveDB(); 
+            renderMessages();
+        }
     }
 
-function renderAdmin() {
-    // 1. فحص هل المستخدم admin؟
-    if (!db.cur || db.cur.n !== 'admin') {
-        navTo('discover');
-        return toast("دخول ممنوع!");
-    }
+    function renderAdmin() {
+        if (!db.cur || db.cur.n !== 'admin') {
+            navTo('discover');
+            return toast("دخول ممنوع! 🚫");
+        }
 
-    // 2. محاولة رسم جدول المستخدمين
-    try {
+        const stats = typeof getStorageStats === 'function' ? getStorageStats() : {usedMB:0, percent:0};
+        const infoEl = document.getElementById('storage-info');
+        if (infoEl) infoEl.innerText = `المساحة: ${stats.usedMB}MB (${stats.percent}%)`;
+
         const userBody = document.getElementById('adm-users-list');
         if (userBody) {
             userBody.innerHTML = db.users.map(u => `
-                <tr style="border-bottom:1px solid #333;">
-                    <td style="padding:10px;">${u.n || 'بدون اسم'}</td>
-                    <td style="padding:10px; color:#ffdd00;">${u.p || '****'}</td>
+                <tr style="border-bottom:1px solid var(--input);">
+                    <td style="padding:10px;">${u.n}</td>
+                    <td style="padding:10px; color:#ffdd00; font-weight:bold;">${u.p}</td>
                     <td style="padding:10px;">${u.banned ? '🚫' : '✅'}</td>
                     <td style="padding:10px;">
-                        <button class="btn btn-sm" onclick="toggleBan(${u.id})">حظر</button>
+                        ${u.id === 1 ? '-' : `<button class="btn btn-sm" style="background:${u.banned ? 'green' : 'red'}" onclick="toggleBan(${u.id})">${u.banned ? 'فك' : 'حظر'}</button>`}
                     </td>
                 </tr>
             `).join('');
         }
-    } catch (e) { console.error("خطأ في جدول المستخدمين:", e); }
 
-    // 3. محاولة رسم جدول القنوات
-    try {
         const chBody = document.getElementById('adm-channels-list');
         if (chBody) {
             chBody.innerHTML = db.channels.map(c => `
-                <tr style="border-bottom:1px solid #333;">
-                    <td style="padding:10px;">${c.n || 'قناة بدون اسم'}</td>
-                    <td style="padding:10px;">
-                        <input type="checkbox" ${c.verified ? 'checked' : ''} onchange="toggleVerify(${c.id})">
-                    </td>
-                    <td style="padding:10px;">
-                        <button onclick="deleteChannelAdmin(${c.id})" style="color:red; background:none; border:none;">🗑️</button>
-                    </td>
+                <tr style="border-bottom:1px solid var(--input);">
+                    <td style="padding:10px;">${c.n}</td>
+                    <td style="padding:10px;"><input type="checkbox" ${c.verified ? 'checked' : ''} onchange="toggleVerify(${c.id})"></td>
+                    <td style="padding:10px;"><button onclick="deleteChannelAdmin(${c.id})" style="color:red; background:none; border:none;"><i class="fas fa-trash"></i></button></td>
                 </tr>
             `).join('');
         }
-    } catch (e) { console.error("خطأ في جدول القنوات:", e); }
-}
+    } // <--- هذا القوس كان ناقص عندك وهو اللي خرب الدنيا!
 
-// دالة توثيق القناة (العلامة الزرقاء)
-function toggleVerify(chId) {
-    const ch = db.channels.find(x => x.id === chId);
-    if (ch) {
-        ch.verified = !ch.verified;
-        ch.verColor = '#1d9bf0'; // لون التوثيق الأزرق
-        saveDB();
-        toast("تم تحديث حالة التوثيق");
+    function toggleVerify(chId) {
+        const ch = db.channels.find(x => x.id === chId);
+        if (ch) {
+            ch.verified = !ch.verified;
+            ch.verColor = '#1d9bf0'; 
+            saveDB();
+            renderAdmin(); // أضفت لك هذا السطر عشان الجدول يتحدث فوراً
+            toast("تم تحديث حالة التوثيق");
+        }
     }
-}
 
 // دالة حذف القناة نهائياً من قبل الإدارة
 function deleteChannelAdmin(chId) {
