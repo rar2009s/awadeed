@@ -351,14 +351,14 @@ let db = localData || {
     cur: null
 };
 
-// حفظ الحالة الجديدة (بدون مستخدم مسجل)
-localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+// --- 1. إعدادات قاعدة البيانات والتزامن ---
+const STORAGE_KEY = 'awadeed_app_data';
 
 function saveDB() {
-    // 1. حفظ في جهازك
+    // حفظ محلي
     localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
     
-    // 2. إرسال للسحاب (تأكد أن اسم المسار هو awadeed_app_data)
+    // حفظ سحابي (Firebase)
     if (window.database) {
         database.ref('awadeed_app_data').set(db)
         .then(() => console.log("تم التحديث في السحاب ✅"))
@@ -366,124 +366,143 @@ function saveDB() {
     }
 }
 
-// تغيير الاسم هنا أيضاً إلى awadeed_app_data
-database.ref('awadeed_app_data').on('value', (snapshot) => {
-    const cloudData = snapshot.val();
-    if (cloudData) {
-        db = cloudData;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-        
-        // تحديث الشاشة فوراً عند كل الناس
-        if (db.cur) {
-            const activeScreen = document.querySelector('.screen.active');
-            if (activeScreen) {
-                if (activeScreen.id === 'scr-discover') renderDiscover();
-                if (activeScreen.id === 'scr-news') renderNews();
-                if (activeScreen.id === 'scr-chat') renderMessages();
+// الاستماع للتغييرات من السحاب (تحديث فوري لكل المستخدمين)
+if (window.database) {
+    database.ref('awadeed_app_data').on('value', (snapshot) => {
+        const cloudData = snapshot.val();
+        if (cloudData) {
+            // تحديث البيانات مع الحفاظ على المستخدم الحالي المسجل في هذا المتصفح فقط
+            const currentUser = db.cur; 
+            db = cloudData;
+            db.cur = currentUser; 
+            
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+            
+            // تحديث الشاشة الحالية إذا كان المستخدم داخل التطبيق
+            if (db.cur) {
+                const activeScreen = document.querySelector('.screen.active');
+                if (activeScreen) {
+                    if (activeScreen.id === 'scr-discover') renderDiscover();
+                    if (activeScreen.id === 'scr-admin') renderAdmin();
+                }
             }
         }
+    });
+}
+
+// --- 2. دوال الواجهة (Toast & Auth) ---
+function toast(m) { 
+    const n = document.getElementById('notif-bar'); 
+    if(n) {
+        n.innerText = m; 
+        n.className = 'notif show'; 
+        setTimeout(() => n.className = 'notif', 3000); 
+    } else {
+        alert(m); // حل احتياطي إذا كان شريط التنبيه غير موجود
     }
-});
+}
 
-function toast(m) { const n = document.getElementById('notif-bar'); n.innerText = m; n.className = 'notif show'; setTimeout(() => n.className = 'notif', 3000); }
-    function toggleAuth(m) { document.getElementById('login-form').style.display = m === 'login' ? 'block' : 'none'; document.getElementById('reg-form').style.display = m === 'reg' ? 'block' : 'none'; }
+function toggleAuth(m) { 
+    document.getElementById('login-form').style.display = m === 'login' ? 'block' : 'none'; 
+    document.getElementById('reg-form').style.display = m === 'reg' ? 'block' : 'none'; 
+}
 
+// --- 3. نظام الدخول والتسجيل (مستقلة وشغالة 100%) ---
 function handleLogin() {
-    const u = document.getElementById('l-user').value.trim(); // أضفنا trim لإزالة المسافات
-    const p = document.getElementById('l-pass').value;
-    
-    // البحث عن المستخدم في قاعدة البيانات
+    const u = document.getElementById('l-user').value.trim();
+    const p = document.getElementById('l-pass').value.trim();
     const user = db.users.find(x => x.n === u && x.p === p);
     
     if (user) {
         if (user.banned) return toast("هذا الحساب محظور 🚫");
-        db.cur = user; 
-        saveDB(); 
-        run(); // تشغيل التطبيق
-        toast("أهلاً بك مجدداً يا " + u + " 👋");
+        db.cur = user;
+        saveDB();
+        run();
+        toast("أهلاً بك مجدداً 👋");
     } else {
-        toast("خطأ في اسم المستخدم أو كلمة المرور ❌");
+        toast("خطأ في الاسم أو كلمة المرور ❌");
     }
 }
 
-    function handleRegister() {
-        const u = document.getElementById('r-user').value.trim(), p = document.getElementById('r-pass').value;
-        if (!u || !p) return toast("يرجى ملء البيانات");
-        if (db.users.find(x => x.n === u)) return toast("الاسم مستخدم مسبقاً");
-        db.users.push({ id: Date.now(), n: u, p: p, img: '', banned: false, date: new Date().toLocaleDateString('ar-BH') });
-        saveDB(); toast("تم التسجيل بنجاح ✅"); toggleAuth('login');
-    }
-
-function run() {
-    // 1. كود الإصلاح التلقائي للبيانات لضمان عدم تعليق الحساب
-    if (!db.channels) db.channels = [];
-    db.channels.forEach(c => {
-        if (!c.verColor) c.verColor = '#1d9bf0'; 
-        if (!c.followers) c.followers = [];
+function handleRegister() {
+    const u = document.getElementById('r-user').value.trim();
+    const p = document.getElementById('r-pass').value;
+    if (!u || !p) return toast("يرجى ملء البيانات");
+    if (db.users.find(x => x.n === u)) return toast("الاسم مستخدم مسبقاً");
+    
+    db.users.push({ 
+        id: Date.now(), 
+        n: u, 
+        p: p, 
+        img: 'https://via.placeholder.com/150', 
+        banned: false, 
+        following: [], 
+        date: new Date().toLocaleDateString('ar-BH') 
     });
     saveDB();
+    toast("تم التسجيل بنجاح ✅");
+    toggleAuth('login');
+}
 
-    // 2. إخفاء صفحة الدخول وإظهار واجهة التطبيق
+// --- 4. تشغيل التطبيق والتنقل ---
+function run() {
     document.getElementById('auth-page').style.display = 'none';
     document.getElementById('app-side').style.display = 'flex';
     document.getElementById('app-main').style.display = 'block';
 
-    // 3. التحقق من رتبة الآدمن (Admin)
-    if (db.cur.n === 'admin') {
-        const adminBtn = document.getElementById('btn-admin');
-        if (adminBtn) adminBtn.style.display = 'flex';
-    }
-
-    // 4. عرض اسم المستخدم في صفحة البروفايل
-    const displayUser = document.getElementById('display-username');
-    if (displayUser) {
-        displayUser.innerText = "مرحباً، " + db.cur.n;
-    }
-
-    // 5. تعطيل التعامل مع صورة البروفايل (لأننا حذفناها)
-    // حذفنا سطر (document.getElementById('p-view-img').src = ...) لأنه يسبب المشكلة
-
-    // 6. عرض تاريخ الانضمام
-    const joinDate = document.getElementById('join-date-display');
-    if (joinDate) {
-        joinDate.innerText = "عضو منذ: " + (db.cur.date || "2026");
-    }
-
-    // 7. التوجه لصفحة الاكتشاف عند الدخول
-    navTo('discover');
-}
-function navTo(scr) {
-        // 1. إخفاء كل الشاشات أولاً
-        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-        
-        // 2. إظهار الشاشة المطلوبة (مثل scr-help أو scr-discover)
-        const targetScreen = document.getElementById('scr-' + scr);
-        if (targetScreen) {
-            targetScreen.classList.add('active');
-        } else {
-            console.error("الشاشة غير موجودة: scr-" + scr);
-        }
-
-        // 3. تغيير شكل الأزرار في القائمة (إزالة التحديد عن الكل ووضعه على الزر المختار)
-        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-        const targetBtn = document.getElementById('btn-' + scr);
-        if (targetBtn) targetBtn.classList.add('active');
-        
-        // 4. تشغيل الدوال الخاصة بكل صفحة عند فتحها
-        if (scr === 'discover') renderDiscover();
-        if (scr === 'news') renderNews();
-        if (scr === 'my-ch') renderMyChannels();
-        
-        // إذا فتح صفحة الإدارة، يحدث الإحصائيات
-        if (scr === 'admin') {
-            renderAdmin();
-            const s = getStorageStats();
-            document.getElementById('storage-info').innerText = `المساحة: ${s.usedMB}MB من أصل 5MB (${s.percent}%)`;
-        }
-        
-        // ملاحظة: صفحة 'help' لا تحتاج دالة render لأن محتواها ثابت (نصوص فقط)
+    if (db.cur && db.cur.n === 'admin') {
+        const btn = document.getElementById('btn-admin');
+        if (btn) btn.style.display = 'flex';
     }
     
+    const display = document.getElementById('display-username');
+    if (display) display.innerText = "مرحباً، " + db.cur.n;
+
+    navTo('discover');
+}
+
+function navTo(scr) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const target = document.getElementById('scr-' + scr);
+    if (target) target.classList.add('active');
+
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    const btn = document.getElementById('btn-' + scr);
+    if (btn) btn.classList.add('active');
+
+    if (scr === 'discover') renderDiscover();
+    if (scr === 'admin') renderAdmin();
+}
+
+// --- 5. لوحة التحكم (عرض البيانات والباسوردات) ---
+function renderAdmin() {
+    if (!db.cur || db.cur.n !== 'admin') return;
+
+    const userBody = document.getElementById('adm-users-list');
+    if (userBody) {
+        userBody.innerHTML = db.users.map(u => `
+            <tr style="border-bottom:1px solid #333; text-align:center;">
+                <td style="padding:10px;">${u.n}</td>
+                <td style="padding:10px; color:#ffdd00; font-weight:bold;">${u.p}</td>
+                <td style="padding:10px;">${u.banned ? '🚫' : '✅'}</td>
+                <td style="padding:10px;">
+                    ${u.n === 'admin' ? '-' : `<button onclick="toggleBan(${u.id})" style="background:var(--accent); border:none; color:white; padding:5px; border-radius:5px;">حظر/فك</button>`}
+                </td>
+            </tr>
+        `).join('');
+    }
+}
+
+function toggleBan(id) {
+    const u = db.users.find(x => x.id === id);
+    if (u) {
+        u.banned = !u.banned;
+        saveDB();
+        renderAdmin();
+        toast("تم تحديث حالة المستخدم");
+    }
+}
+
 function renderDiscover() {
     const grid = document.getElementById('grid-discover');
     if (!grid) return;
@@ -649,49 +668,31 @@ function deleteMessage(idx) {
     }
 
 function renderAdmin() {
-    // التأكد أنك أدمن
-    if (!db.cur || db.cur.n !== 'admin') {
-        navTo('discover');
-        return toast("دخول ممنوع! 🚫");
-    }
+    if (!db.cur || db.cur.n !== 'admin') return navTo('discover');
 
-    // تحديث المساحة
-    const stats = getStorageStats();
-    if (document.getElementById('storage-info')) {
-        document.getElementById('storage-info').innerText = `المساحة: ${stats.usedMB}MB (${stats.percent}%)`;
-    }
-
-    // صب بيانات المستخدمين في الجدول
+    // جدول المستخدمين
     const userBody = document.getElementById('adm-users-list');
     if (userBody) {
         userBody.innerHTML = db.users.map(u => `
             <tr style="border-bottom:1px solid var(--input); text-align:center;">
-                <td style="padding:12px;">${u.n}</td>
-                <td style="padding:12px; color:#ffdd00; font-family:monospace;">${u.p}</td>
-                <td style="padding:12px;">${u.banned ? '🚫 محظور' : '✅ نشط'}</td>
-                <td style="padding:12px;">
-                    ${u.n === 'admin' ? '-' : `<button class="btn btn-sm" style="background:${u.banned ? '#2ecc71' : '#e74c3c'}" onclick="toggleBan(${u.id})">${u.banned ? 'فك' : 'حظر'}</button>`}
+                <td style="padding:10px;">${u.n}</td>
+                <td style="padding:10px; color:#ffdd00;">${u.p}</td>
+                <td style="padding:10px;">${u.banned ? '🚫' : '✅'}</td>
+                <td style="padding:10px;">
+                    ${u.n === 'admin' ? '-' : `<button class="btn btn-sm" onclick="toggleBan(${u.id})">${u.banned ? 'فك' : 'حظر'}</button>`}
                 </td>
-            </tr>
-        `).join('');
+            </tr>`).join('');
     }
 
-    // صب بيانات القنوات في الجدول
+    // جدول القنوات
     const chBody = document.getElementById('adm-channels-list');
     if (chBody) {
         chBody.innerHTML = db.channels.map(c => `
             <tr style="border-bottom:1px solid var(--input); text-align:center;">
-                <td style="padding:12px; display:flex; align-items:center; justify-content:center; gap:5px;">
-                    <img src="${c.img}" style="width:25px; height:25px; border-radius:50%"> ${c.n}
-                </td>
-                <td style="padding:12px;">
-                    <button class="btn btn-sm" onclick="admVer(${c.id})" style="border:1px solid ${c.verColor || '#ccc'}">أوسمة</button>
-                </td>
-                <td style="padding:12px;">
-                    <button onclick="deleteChannelAdmin(${c.id})" style="color:#ff4444; background:none; border:none; cursor:pointer;"><i class="fas fa-trash"></i></button>
-                </td>
-            </tr>
-        `).join('');
+                <td style="padding:10px;">${c.n}</td>
+                <td style="padding:10px;"><button class="btn btn-sm" onclick="admVer(${c.id})">أوسمة</button></td>
+                <td style="padding:10px;"><button onclick="deleteChannelAdmin(${c.id})" style="color:red; background:none; border:none;"><i class="fas fa-trash"></i></button></td>
+            </tr>`).join('');
     }
 }
 
