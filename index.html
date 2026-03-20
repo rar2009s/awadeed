@@ -353,8 +353,13 @@ let db = localData || {
 localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
 
 function saveDB() {
+    // حفظ في جهازك
     localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-    database.ref('awadeed_app_data').set(db); 
+    
+    // إرسال للسحاب (تأكد من اسم المسار awadeed_app_data)
+    if (typeof database !== 'undefined') {
+        database.ref('awadeed_app_data').set(db);
+    }
 }
 
 // تغيير الاسم هنا أيضاً إلى awadeed_app_data
@@ -506,8 +511,9 @@ function renderDiscover() {
 
 function toggleFollow(chId) {
     if (!db.cur) return toast("سجل دخول أولاً");
-    if (!db.cur.following) db.cur.following = [];
     
+    // تأمين وجود مصفوفة المتابعة للمستخدم وللقناة
+    if (!db.cur.following) db.cur.following = [];
     const ch = db.channels.find(x => x.id === chId);
     if (!ch) return;
     if (!ch.followers) ch.followers = [];
@@ -516,16 +522,21 @@ function toggleFollow(chId) {
     const cIdx = ch.followers.indexOf(db.cur.id);
 
     if (uIdx === -1) {
-        db.cur.following.push(chId);
-        if (cIdx === -1) ch.followers.push(db.cur.id);
+        // --- حالة المتابعة ---
+        db.cur.following.push(chId); // تضاف لحسابك
+        if (cIdx === -1) ch.followers.push(db.cur.id); // تضاف للقناة (عشان الكل يشوف الزيادة)
         toast("تمت المتابعة ✅");
     } else {
-        db.cur.following.splice(uIdx, 1);
-        if (cIdx !== -1) ch.followers.splice(cIdx, 1);
+        // --- حالة إلغاء المتابعة ---
+        db.cur.following.splice(uIdx, 1); // تحذف من حسابك
+        if (cIdx !== -1) ch.followers.splice(cIdx, 1); // تحذف من القناة (عشان ينقص العداد للكل)
         toast("إلغاء المتابعة");
     }
 
-    saveDB(); // حفظ في Firebase لزيادة العداد للجميع
+    // 🔴 أهم خطوة: الحفظ في Firebase فوراً
+    saveDB(); 
+    
+    // تحديث الواجهة
     renderDiscover();
 }
 
